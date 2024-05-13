@@ -2,7 +2,6 @@ import numpy as np
 from scipy.ndimage import distance_transform_edt
 
 
-
 def compute_sdt(labels: np.ndarray, scale: int = 5):
     """Function to compute a signed distance transform."""
 
