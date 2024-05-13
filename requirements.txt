@@ -1,0 +1,10 @@
+pytorch==2.2
+torchvision
+jupyter
+imageio
+scipy
+scikit-image
+tensorboard
+matplotlib
+pytorch-cuda==11.8
+ipykernel
