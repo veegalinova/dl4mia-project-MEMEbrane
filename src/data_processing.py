@@ -9,6 +9,7 @@ from torch.utils.data import Dataset
 from torchvision import transforms
 from tqdm import tqdm
 import tifffile
+from torchvision.transforms import v2 as transformsv2
 
 
 def compute_sdt(labels: np.ndarray, scale: int = 5):
@@ -78,6 +79,9 @@ class SDTDataset(Dataset):
             img_path = os.path.join(self.root_dir, "im", self.list_images[sample_ind])
             image = Image.open(img_path)
             image.load()
+            #dirty code to make sure all images are at least 256
+            image = transformsv2.Pad(100)(image)
+            image = transforms.CenterCrop(256)(image)
             self.loaded_imgs[sample_ind] = inp_transforms(image)
 
             embryo_info = self.list_images[sample_ind].split("_max_")[0]
@@ -88,6 +92,9 @@ class SDTDataset(Dataset):
             mask_path = os.path.join(self.root_dir, "mask", mask_filename)
             mask = Image.open(mask_path)
             mask.load()
+            #dirty code to make sure all masks are at least 256
+            mask = transformsv2.Pad(100)(mask)
+            mask = transforms.CenterCrop(256)(mask)
             self.loaded_masks[sample_ind] = mask
 
     # get the total number of samples

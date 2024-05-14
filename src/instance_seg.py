@@ -8,6 +8,7 @@ from PIL import Image
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
+from torchvision.transforms import v2 as transformsv2
 from model import UNet
 from model_evaluation import validate
 from tqdm import tqdm
@@ -15,6 +16,41 @@ import tifffile
 from data_processing import SDTDataset
 import sys
 sys.path.append('.')
+
+def salt_and_pepper_noise(image, amount=0.05):
+    """
+    Add salt and pepper noise to an image
+    """
+    out = image.clone()
+    num_salt = int(amount * image.numel() * 0.5)
+    num_pepper = int(amount * image.numel() * 0.5)
+
+    # Add Salt noise
+    coords = [
+        torch.randint(0, i - 1, [num_salt]) if i > 1 else [0] * num_salt
+        for i in image.shape
+    ]
+    out[coords] = 1
+
+    # Add Pepper noise
+    coords = [
+        torch.randint(0, i - 1, [num_pepper]) if i > 1 else [0] * num_pepper
+        for i in image.shape
+    ]
+    out[coords] = 0
+
+    return out
+
+def gaussian_noise(image, mean = 0, var = 0.1):
+    ch, row,col= image.shape
+    mean = 0
+    var = 0.1
+    sigma = var**0.5
+    gauss = np.random.normal(mean,sigma,(ch, row,col))
+    gauss = gauss.reshape(ch,row,col)
+    noisy = image + gauss
+    noisy = transforms.Normalize([0.5], [0.5])(noisy)
+    return noisy
 
 
 def train(
@@ -107,7 +143,17 @@ def main():
 
     transform = transforms.Compose(
         [
-            transforms.CenterCrop((128, 128))
+            transforms.RandomHorizontalFlip(0.5),
+            transforms.RandomVerticalFlip(0.5),  
+            transforms.RandomRotation([90,90]),
+            transforms.RandomCrop(200)   
+            ]
+    )
+    img_transforms = transforms.Compose(
+        [
+            transforms.GaussianBlur(kernel_size = 5, sigma= 5),
+            transformsv2.Lambda(salt_and_pepper_noise),
+            transformsv2.Lambda(gaussian_noise)
         ]
     )
 
