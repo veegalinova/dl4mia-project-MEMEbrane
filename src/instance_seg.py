@@ -106,16 +106,17 @@ def main():
 
     transform = transforms.Compose(
         [
-            transforms.RandomCrop(192)
+            transforms.CenterCrop((128, 128))
         ]
     )
 
     train_data = SDTDataset(transform=transform, train=True)
     n_samples = len(train_data)
     train_loader = DataLoader(train_data, batch_size=5, shuffle=True, num_workers=8)
-    val_data = SDTDataset(transform=transform, return_mask=True)
+    val_data = SDTDataset(transform=transform, train=False, return_mask=True)
     val_loader = DataLoader(val_data, batch_size=5)
 
+    print(len(train_loader), len(val_loader))
     # Initialize the model.
     unet = UNet(
         depth=4,
@@ -133,7 +134,7 @@ def main():
     loss = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(unet.parameters(), lr=learning_rate)
 
-    for epoch in tqdm(range(20)):
+    for epoch in tqdm(range(200)):
         train(
             unet,
             train_loader,
@@ -143,9 +144,8 @@ def main():
             log_interval=10,
             device=device,
         )
-        metrics = dict()
-        metrics["precision"], metrics["recall"], metrics["accuracy"] = validate(unet, val_loader, device=device)
-        print(f"Validation accuracy after training epoch {epoch} is {np.sum(metrics['accuracy']) / n_samples}")
+        metrics = validate(unet, val_loader, device=device, mode='sdt')
+        print(f"Validation mse after training epoch {epoch} is {np.sum(metrics['mse_list']) / n_samples}")
 
     output_path = Path("logs/")
     output_path.mkdir(exist_ok=True)

@@ -18,6 +18,7 @@ from torch.utils.data import DataLoader
 from skimage.filters import threshold_otsu
 from skimage.segmentation import watershed
 from scipy.ndimage import label, maximum_filter
+from sklearn.metrics import mean_squared_error
 
 
 def find_local_maxima(distance_transform, min_dist_between_points):
@@ -118,9 +119,14 @@ def evaluate(gt_labels: np.ndarray, pred_labels: np.ndarray, th: float = 0.5):
     return precision, recall, accuracy
 
 
-def validate(model, dataloader, device='cuda'):
+def validate(model, dataloader, device='cuda', mode='mask'):
     #iterate over evaluation images
-    precision_list, recall_list, accuracy_list = [], [], []
+    metrics = dict()
+    if mode == 'mask':
+        metrics['precision_list'], metrics['recall_list'], metrics['accuracy_list'] = [], [], []
+    elif mode == 'sdt':
+        metrics['mse_list'] = []
+
     for idx, (image, mask, sdt) in enumerate(tqdm(dataloader)):
 
         #retrieve image
@@ -132,24 +138,29 @@ def validate(model, dataloader, device='cuda'):
         #removes redundant dimensions I think?
         image = np.squeeze(image.cpu())
         gt_labels = np.squeeze(mask.cpu().numpy())
+        gt_sdt = np.squeeze(sdt.cpu().numpy())
         pred = np.squeeze(pred.cpu().detach().numpy())
 
-        # Choose a threshold value to use to get the boundary mask.
-        # Feel free to play around with the threshold.
-        threshold = threshold_otsu(pred)
+        if mode == 'mask':
+            # Do watershed and compare to gt mask
+            threshold = threshold_otsu(pred)
 
-        # Get inner mask
-        inner_mask = get_inner_mask(pred, threshold=threshold)
+            # Get inner mask
+            inner_mask = get_inner_mask(pred, threshold=threshold)
 
-        # Get the segmentation
-        seg = watershed_from_boundary_distance(pred, inner_mask, min_seed_distance=20)
+            # Get the segmentation
+            seg = watershed_from_boundary_distance(pred, inner_mask, min_seed_distance=20)
 
-        precision, recall, accuracy = evaluate(gt_labels, seg)
-        precision_list.append(precision)
-        recall_list.append(recall)
-        accuracy_list.append(accuracy)
+            precision, recall, accuracy = evaluate(gt_labels, pred, mode='sdt')
+            metrics['precision_list'].append(precision)
+            metrics['recall_list'].append(recall)
+            metrics['accuracy_list'].append(accuracy)
+        
+        elif mode == 'sdt':
+            # Compare mse of predicted sdt to computed sdt
+            metrics['mse_list'].append(mean_squared_error(pred.flatten(), gt_sdt.flatten()))
 
-    return precision_list, recall_list, accuracy_list
+    return metrics
 
     
 def main(modelpath: str="", filepath: str="", batch_size: int=1, shuffle: bool=False, workers:int=8):
