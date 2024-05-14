@@ -8,6 +8,7 @@ from PIL import Image
 from torch.utils.data import DataLoader
 from torchvision import transforms
 from model import UNet
+from model_evaluation import validate
 from tqdm import tqdm
 import tifffile
 from data_processing import SDTDataset
@@ -105,14 +106,15 @@ def main():
 
     transform = transforms.Compose(
         [
-            transforms.RandomCrop(128)
+            transforms.RandomCrop(192)
         ]
     )
 
     train_data = SDTDataset(transform=transform, train=True)
+    n_samples = len(train_data)
     train_loader = DataLoader(train_data, batch_size=5, shuffle=True, num_workers=8)
-    # val_data = SDTDataset(transform=transform)
-    # val_loader = DataLoader(val_data, batch_size=5)
+    val_data = SDTDataset(transform=transform, return_mask=True)
+    val_loader = DataLoader(val_data, batch_size=5)
 
     # Initialize the model.
     unet = UNet(
@@ -141,6 +143,9 @@ def main():
             log_interval=10,
             device=device,
         )
+        metrics = dict()
+        metrics["precision"], metrics["recall"], metrics["accuracy"] = validate(unet, val_loader, device=device)
+        print(f"Validation accuracy after training epoch {epoch} is {np.sum(metrics['accuracy']) / n_samples}")
 
     output_path = Path("logs/")
     output_path.mkdir(exist_ok=True)

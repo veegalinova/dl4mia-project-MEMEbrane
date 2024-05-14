@@ -13,7 +13,49 @@ import torch
 import pickle
 from skimage.segmentation import relabel_sequential
 from scipy.optimize import linear_sum_assignment
+from tqdm import tqdm
+from torch.utils.data import DataLoader
+from skimage.filters import threshold_otsu
+from skimage.segmentation import watershed
+from scipy.ndimage import label, maximum_filter
 
+
+def find_local_maxima(distance_transform, min_dist_between_points):
+    # Use `maximum_filter` to perform a maximum filter convolution on the distance_transform
+    max_filtered = maximum_filter(distance_transform, min_dist_between_points)
+    maxima = max_filtered == distance_transform
+    # Uniquely label the local maxima
+    seeds, n = label(maxima)
+
+    return seeds, n
+
+
+def watershed_from_boundary_distance(
+    boundary_distances: np.ndarray,
+    inner_mask: np.ndarray,
+    id_offset: float = 0,
+    min_seed_distance: int = 10,
+):
+    """Function to compute a watershed from boundary distances."""
+
+    seeds, n = find_local_maxima(boundary_distances, min_seed_distance)
+
+    if n == 0:
+        return np.zeros(boundary_distances.shape, dtype=np.uint64), id_offset
+
+    seeds[seeds != 0] += id_offset
+
+    # calculate our segmentation
+    segmentation = watershed(
+        boundary_distances.max() - boundary_distances, seeds, mask=inner_mask
+    )
+
+    return segmentation
+
+
+def get_inner_mask(pred, threshold):
+    inner_mask = pred > threshold
+    return inner_mask
 
 
 def evaluate(gt_labels: np.ndarray, pred_labels: np.ndarray, th: float = 0.5):
@@ -76,8 +118,9 @@ def evaluate(gt_labels: np.ndarray, pred_labels: np.ndarray, th: float = 0.5):
     return precision, recall, accuracy
 
 
-def validate(model, dataloader):
+def validate(model, dataloader, device='cuda'):
     #iterate over evaluation images
+    precision_list, recall_list, accuracy_list = [], [], []
     for idx, (image, mask, sdt) in enumerate(tqdm(dataloader)):
 
         #retrieve image
@@ -91,7 +134,17 @@ def validate(model, dataloader):
         gt_labels = np.squeeze(mask.cpu().numpy())
         pred = np.squeeze(pred.cpu().detach().numpy())
 
-        precision, recall, accuracy = evaluate(gt_labels, pred_labels)
+        # Choose a threshold value to use to get the boundary mask.
+        # Feel free to play around with the threshold.
+        threshold = threshold_otsu(pred)
+
+        # Get inner mask
+        inner_mask = get_inner_mask(pred, threshold=threshold)
+
+        # Get the segmentation
+        seg = watershed_from_boundary_distance(pred, inner_mask, min_seed_distance=20)
+
+        precision, recall, accuracy = evaluate(gt_labels, seg)
         precision_list.append(precision)
         recall_list.append(recall)
         accuracy_list.append(accuracy)
