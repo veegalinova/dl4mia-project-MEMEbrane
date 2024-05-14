@@ -41,10 +41,10 @@ def salt_and_pepper_noise(image, amount=0.05):
 
     return out
 
-def gaussian_noise(image, mean = 0, var = 0.1):
+def gaussian_noise(image, mean = 0, var = 0.05):
     ch, row,col= image.shape
-    mean = 0
-    var = 0.1
+    mean = mean
+    var = var
     sigma = var**0.5
     gauss = np.random.normal(mean,sigma,(ch, row,col))
     gauss = gauss.reshape(ch,row,col)
