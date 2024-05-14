@@ -75,7 +75,6 @@ class SDTDataset(Dataset):
         self.loaded_imgs = [None] * self.nsamples
         self.loaded_masks = [None] * self.nsamples
         for sample_ind in range(self.nsamples):
-            print(sample_ind)
             img_path = os.path.join(self.root_dir, "im", self.list_images[sample_ind])
             image = Image.open(img_path)
             image.load()
@@ -85,9 +84,6 @@ class SDTDataset(Dataset):
             time_info = "_" + self.list_images[sample_ind].split("_")[-1]
 
             mask_filename = [i for i in self.list_masks if (embryo_info in i and time_info in i)][0]
-            print(img_path)
-            print(mask_filename)
-
 
             mask_path = os.path.join(self.root_dir, "mask", mask_filename)
             mask = Image.open(mask_path)
