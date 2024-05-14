@@ -1,5 +1,7 @@
 import numpy as np
 from scipy.ndimage import distance_transform_edt
+from torch.utils.data import Dataset
+
 
 
 def compute_sdt(labels: np.ndarray, scale: int = 5):
