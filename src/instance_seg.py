@@ -170,7 +170,7 @@ def main():
         out_channels=1,
         final_activation="Tanh",
         num_fmaps=16,
-        fmap_inc_factor=3,
+        fmap_inc_factor=2,
         downsample_factor=2,
         padding="same",
         upsample_mode="nearest",
@@ -193,7 +193,7 @@ def main():
             device=device,
         )
         metrics = validate(unet, val_loader, device=device, mode='sdt')
-        writer.add_scalar("MSE/validation", np.sum(metrics['mse_list']) / len(metrics['mse_list']))
+        writer.add_scalar("MSE/validation", np.sum(metrics['mse_list']) / len(metrics['mse_list']), epoch)
         scheduler.step(np.sum(metrics['mse_list']) / len(metrics['mse_list']))
         print(f"Validation mse after training epoch {epoch} is {np.sum(metrics['mse_list']) / len(metrics['mse_list'])}")
 
@@ -203,6 +203,7 @@ def main():
         {'model_state_dict': unet.state_dict()},
         "logs/model.pth"
     )
+
     writer.flush()
 
 
