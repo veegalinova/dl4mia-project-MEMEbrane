@@ -6,6 +6,7 @@ from pathlib import Path
 import torch
 from PIL import Image
 from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
 from model import UNet
 from model_evaluation import validate
@@ -131,8 +132,9 @@ def main():
 
     learning_rate = 1e-4
     loss = torch.nn.MSELoss()
+    writer = SummaryWriter()
     optimizer = torch.optim.Adam(unet.parameters(), lr=learning_rate)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=3, min_lr=1e-8)
 
     for epoch in tqdm(range(200)):
         train(
@@ -145,6 +147,7 @@ def main():
             device=device,
         )
         metrics = validate(unet, val_loader, device=device, mode='sdt')
+        writer.add_scalar("MSE/validation", np.sum(metrics['mse_list']) / len(metrics['mse_list']))
         scheduler.step(np.sum(metrics['mse_list']) / len(metrics['mse_list']))
         print(f"Validation mse after training epoch {epoch} is {np.sum(metrics['mse_list']) / len(metrics['mse_list'])}")
 
@@ -154,6 +157,7 @@ def main():
         {'model_state_dict': unet.state_dict()},
         "logs/model.pth"
     )
+    writer.flush()
 
 
 if __name__ == "__main__":
