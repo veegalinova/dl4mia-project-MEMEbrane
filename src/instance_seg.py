@@ -6,30 +6,110 @@ from pathlib import Path
 import torch
 from PIL import Image
 from torch.utils.data import DataLoader
-from torch.utils.data 
-from torchvision 
-from scipy.ndimage
-from local import train
-from unet import UNet
+from torchvision import transforms
+from model import UNet
 from tqdm import tqdm
 import tifffile
-
-from skimage.filters 
 from data_processing import SDTDataset
-    
+import sys
+sys.path.append('.')
+
+
+def train(
+    model,
+    loader,
+    optimizer,
+    loss_function,
+    epoch,
+    log_interval=100,
+    log_image_interval=20,
+    tb_logger=None,
+    device=None,
+    early_stop=False,
+):
+    if device is None:
+        # You can pass in a device or we will default to using
+        # the gpu. Feel free to try training on the cpu to see
+        # what sort of performance difference there is
+        if torch.cuda.is_available():
+            device = torch.device("cuda")
+        else:
+            device = torch.device("cpu")
+
+    # set the model to train mode
+    model.train()
+
+    # move model to device
+    model = model.to(device)
+
+    # iterate over the batches of this epoch
+    for batch_id, (x, y) in enumerate(loader):
+        # move input and target to the active device (either cpu or gpu)
+        x, y = x.to(device), y.to(device)
+
+        # zero the gradients for this iteration
+        optimizer.zero_grad()
+
+        # apply model and calculate loss
+        prediction = model(x)
+        if prediction.shape != y.shape:
+            y = crop(y, prediction)
+        if y.dtype != prediction.dtype:
+            y = y.type(prediction.dtype)
+        loss = loss_function(prediction, y)
+
+        # backpropagate the loss and adjust the parameters
+        loss.backward()
+        optimizer.step()
+
+        # log to console
+        if batch_id % log_interval == 0:
+            print(
+                "Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}".format(
+                    epoch,
+                    batch_id * len(x),
+                    len(loader.dataset),
+                    100.0 * batch_id / len(loader),
+                    loss.item(),
+                )
+            )
+
+        # log to tensorboard
+        if tb_logger is not None:
+            step = epoch * len(loader) + batch_id
+            tb_logger.add_scalar(
+                tag="train_loss", scalar_value=loss.item(), global_step=step
+            )
+            # check if we log images in this iteration
+            if step % log_image_interval == 0:
+                tb_logger.add_images(
+                    tag="input", img_tensor=x.to("cpu"), global_step=step
+                )
+                tb_logger.add_images(
+                    tag="target", img_tensor=y.to("cpu"), global_step=step
+                )
+                tb_logger.add_images(
+                    tag="prediction",
+                    img_tensor=prediction.to("cpu").detach(),
+                    global_step=step,
+                )
+
+        if early_stop and batch_id > 5:
+            print("Stopping test early!")
+            break
 
 
 def main():
     device = "cuda"  # 'cuda', 'cpu', 'mps'
     assert torch.cuda.is_available()
 
-    transforms = transforms.Compose(
+    transform = transforms.Compose(
         [
             transforms.RandomCrop(256)
         ]
     )
 
-    train_data = SDTDataset("nuclei_train_data", transform=transforms)
+    train_data = SDTDataset("nuclei_train_data", transform=transform)
     train_loader = DataLoader(train_data, batch_size=5, shuffle=True, num_workers=8)
 
     learning_rate = 1e-4
