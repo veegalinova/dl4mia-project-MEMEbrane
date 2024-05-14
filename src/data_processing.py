@@ -1,7 +1,14 @@
 import numpy as np
 from scipy.ndimage import distance_transform_edt
+from matplotlib.colors import ListedColormap
+import os
+import torch
+from PIL import Image
+from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
-
+from torchvision import transforms
+from tqdm import tqdm
+import tifffile
 
 
 def compute_sdt(labels: np.ndarray, scale: int = 5):
@@ -28,17 +35,30 @@ def compute_sdt(labels: np.ndarray, scale: int = 5):
 
 
 class SDTDataset(Dataset):
-    """A PyTorch dataset to load cell images and nuclei masks."""
+    """A PyTorch dataset to load images and cell masks."""
 
-    def __init__(self, root_dir, transform=None, img_transform=None, return_mask=False):
-        self.root_dir = (
-            "/group/dl4miacourse/segmentation/" + root_dir
-        )  # the directory with all the training samples
-        self.samples = os.listdir(self.root_dir)  # list the samples
+    def __init__(self, root_dir = "/group/dl4miacourse/projects/membrane/ecad_gfp_cropped/test", 
+    transform=None, img_transform=None, return_mask=False):
+        
+        # the directory with all the training samples
+        self.root_dir = root_dir
+        
+        #the name of the raw images is different from the name of the mask names so we temporarilly store this info in separate variables
+        self.list_images = os.listdir(self.root_dir+"/im/") 
+
+        self.list_masks = os.listdir(self.root_dir+"/mask/") 
+
+        assert len(self.list_images) == len(self.list_masks)
+
+        #store information on the number of samples
+        self.nsamples = len(self.list_images)
+
         self.return_mask = return_mask
+
         self.transform = (
             transform  # transformations to apply to both inputs and targets
         )
+
         self.img_transform = img_transform  # transformations to apply to raw image only
         #  transformations to apply just to inputs
         inp_transforms = transforms.Compose(
@@ -49,25 +69,28 @@ class SDTDataset(Dataset):
             ]
         )
 
-        self.loaded_imgs = [None] * len(self.samples)
-        self.loaded_masks = [None] * len(self.samples)
-        for sample_ind in range(len(self.samples)):
-            img_path = os.path.join(
-                self.root_dir, self.samples[sample_ind], "image.tif"
-            )
+        self.loaded_imgs = [None] * self.nsamples
+        self.loaded_masks = [None] * self.nsamples
+        for sample_ind in range(self.nsamples):
+            img_path = os.path.join(self.root_dir, "im", self.list_images[sample_ind])
             image = Image.open(img_path)
             image.load()
             self.loaded_imgs[sample_ind] = inp_transforms(image)
-            mask_path = os.path.join(
-                self.root_dir, self.samples[sample_ind], "label.tif"
-            )
+
+            embryo_info = self.list_images[sample_ind].split("_max_")[0]
+            time_info = self.list_images[sample_ind].split("_")[-1]
+
+            mask_filename = [i for i in self.list_masks if (embryo_info in i and time_info in i)][0]
+
+
+            mask_path = os.path.join(self.root_dir, "mask", mask_filename)
             mask = Image.open(mask_path)
             mask.load()
             self.loaded_masks[sample_ind] = mask
 
     # get the total number of samples
     def __len__(self):
-        return len(self.samples)
+        return self.nsamples
 
     # fetch the training sample given its index
     def __getitem__(self, idx):
@@ -96,3 +119,11 @@ class SDTDataset(Dataset):
         sdt_target_array = compute_sdt(mask)
         sdt_target = transforms.ToTensor()(sdt_target_array)
         return sdt_target.float()
+
+    def getImageList(self):
+        return self.list_images
+
+    def getMaskList(self):
+        return self.list_masks
+
+
