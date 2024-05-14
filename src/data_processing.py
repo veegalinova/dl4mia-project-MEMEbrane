@@ -37,11 +37,14 @@ def compute_sdt(labels: np.ndarray, scale: int = 5):
 class SDTDataset(Dataset):
     """A PyTorch dataset to load images and cell masks."""
 
-    def __init__(self, root_dir = "/group/dl4miacourse/projects/membrane/ecad_gfp_cropped/test", 
-    transform=None, img_transform=None, return_mask=False):
+    def __init__(self, root_dir = "/group/dl4miacourse/projects/membrane/ecad_gfp_cropped/", 
+    transform=None, img_transform=None, return_mask=False, train=False):
         
         # the directory with all the training samples
-        self.root_dir = root_dir
+        if train:
+            self.root_dir = root_dir + 'train/'
+        else:
+            self.root_dir = root_dir + 'test/'
         
         #the name of the raw images is different from the name of the mask names so we temporarilly store this info in separate variables
         self.list_images = os.listdir(self.root_dir+"/im/") 
@@ -72,15 +75,18 @@ class SDTDataset(Dataset):
         self.loaded_imgs = [None] * self.nsamples
         self.loaded_masks = [None] * self.nsamples
         for sample_ind in range(self.nsamples):
+            print(sample_ind)
             img_path = os.path.join(self.root_dir, "im", self.list_images[sample_ind])
             image = Image.open(img_path)
             image.load()
             self.loaded_imgs[sample_ind] = inp_transforms(image)
 
             embryo_info = self.list_images[sample_ind].split("_max_")[0]
-            time_info = self.list_images[sample_ind].split("_")[-1]
+            time_info = "_" + self.list_images[sample_ind].split("_")[-1]
 
             mask_filename = [i for i in self.list_masks if (embryo_info in i and time_info in i)][0]
+            print(img_path)
+            print(mask_filename)
 
 
             mask_path = os.path.join(self.root_dir, "mask", mask_filename)

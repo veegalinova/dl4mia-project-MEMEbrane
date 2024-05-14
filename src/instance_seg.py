@@ -105,16 +105,14 @@ def main():
 
     transform = transforms.Compose(
         [
-            transforms.RandomCrop(256)
+            transforms.RandomCrop(128)
         ]
     )
 
-    train_data = SDTDataset("nuclei_train_data", transform=transform)
+    train_data = SDTDataset(transform=transform, train=True)
     train_loader = DataLoader(train_data, batch_size=5, shuffle=True, num_workers=8)
-
-    learning_rate = 1e-4
-    loss = torch.nn.MSELoss()
-    optimizer = torch.optim.Adam(unet.parameters(), lr=learning_rate)
+    # val_data = SDTDataset(transform=transform)
+    # val_loader = DataLoader(val_data, batch_size=5)
 
     # Initialize the model.
     unet = UNet(
@@ -129,7 +127,11 @@ def main():
         upsample_mode="nearest",
     )
 
-    for epoch in range(20):
+    learning_rate = 1e-4
+    loss = torch.nn.MSELoss()
+    optimizer = torch.optim.Adam(unet.parameters(), lr=learning_rate)
+
+    for epoch in tqdm(range(20)):
         train(
             unet,
             train_loader,
