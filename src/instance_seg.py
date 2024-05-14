@@ -137,6 +137,24 @@ def train(
             break
 
 
+class EarlyStopper:
+    def __init__(self, patience=1, min_delta=0):
+        self.patience = patience
+        self.min_delta = min_delta
+        self.counter = 0
+        self.min_validation_loss = float('inf')
+
+    def early_stop(self, validation_loss):
+        if validation_loss < self.min_validation_loss:
+            self.min_validation_loss = validation_loss
+            self.counter = 0
+        elif validation_loss > (self.min_validation_loss + self.min_delta):
+            self.counter += 1
+            if self.counter >= self.patience:
+                return True
+        return False
+
+
 def main():
     device = "cuda"  # 'cuda', 'cpu', 'mps'
     assert torch.cuda.is_available()
@@ -158,9 +176,9 @@ def main():
     )
 
     train_data = SDTDataset(transform=transform, train=True)
-    train_loader = DataLoader(train_data, batch_size=5, shuffle=True, num_workers=8)
+    train_loader = DataLoader(train_data, batch_size=10, shuffle=True, num_workers=8)
     val_data = SDTDataset(transform=transform, train=False, return_mask=True)
-    val_loader = DataLoader(val_data, batch_size=5)
+    val_loader = DataLoader(val_data, batch_size=10)
 
     print(len(train_loader), len(val_loader))
     # Initialize the model.
@@ -180,8 +198,10 @@ def main():
     loss = torch.nn.MSELoss()
     writer = SummaryWriter()
     optimizer = torch.optim.Adam(unet.parameters(), lr=learning_rate)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=3, min_lr=1e-8)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5, min_lr=1e-8)
 
+    early_stop = False
+    early_stopper = EarlyStopper(patience=10)
     for epoch in tqdm(range(200)):
         train(
             unet,
@@ -191,11 +211,15 @@ def main():
             epoch,
             log_interval=10,
             device=device,
+            early_stop=early_stop,
         )
         metrics = validate(unet, val_loader, device=device, mode='sdt')
-        writer.add_scalar("MSE/validation", np.sum(metrics['mse_list']) / len(metrics['mse_list']), epoch)
-        scheduler.step(np.sum(metrics['mse_list']) / len(metrics['mse_list']))
-        print(f"Validation mse after training epoch {epoch} is {np.sum(metrics['mse_list']) / len(metrics['mse_list'])}")
+        mse = np.sum(metrics['mse_list']) / len(metrics['mse_list'])
+        writer.add_scalar("MSE/validation", mse, epoch)
+        scheduler.step(mse)
+        if early_stopper.early_stop(mse):
+            early_stop=True
+        print(f"Validation mse after training epoch {epoch} is {mse}")
 
     output_path = Path("logs/")
     output_path.mkdir(exist_ok=True)
