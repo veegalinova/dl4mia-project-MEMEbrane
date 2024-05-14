@@ -111,7 +111,6 @@ def main():
     )
 
     train_data = SDTDataset(transform=transform, train=True)
-    n_samples = len(train_data)
     train_loader = DataLoader(train_data, batch_size=5, shuffle=True, num_workers=8)
     val_data = SDTDataset(transform=transform, train=False, return_mask=True)
     val_loader = DataLoader(val_data, batch_size=5)
@@ -133,6 +132,7 @@ def main():
     learning_rate = 1e-4
     loss = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(unet.parameters(), lr=learning_rate)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer)
 
     for epoch in tqdm(range(200)):
         train(
@@ -145,7 +145,8 @@ def main():
             device=device,
         )
         metrics = validate(unet, val_loader, device=device, mode='sdt')
-        print(f"Validation mse after training epoch {epoch} is {np.sum(metrics['mse_list']) / n_samples}")
+        scheduler.step(np.sum(metrics['mse_list']) / len(metrics['mse_list']))
+        print(f"Validation mse after training epoch {epoch} is {np.sum(metrics['mse_list']) / len(metrics['mse_list'])}")
 
     output_path = Path("logs/")
     output_path.mkdir(exist_ok=True)

@@ -100,6 +100,7 @@ def evaluate(gt_labels: np.ndarray, pred_labels: np.ndarray, th: float = 0.5):
 
     # remove background
     iouMat = iouMat[1:, 1:]
+    best_iou = np.max(iouMat, axis=0)
 
     # use IoU threshold th
     if num_matches > 0 and np.max(iouMat) > th:
@@ -116,14 +117,14 @@ def evaluate(gt_labels: np.ndarray, pred_labels: np.ndarray, th: float = 0.5):
     recall = tp / max(1, tp + fn)
     accuracy = tp / (tp + fp + fn)
 
-    return precision, recall, accuracy
+    return precision, recall, accuracy, best_iou
 
 
 def validate(model, dataloader, device='cuda', mode='mask'):
     #iterate over evaluation images
     metrics = dict()
     if mode == 'mask':
-        metrics['precision_list'], metrics['recall_list'], metrics['accuracy_list'] = [], [], []
+        metrics['precision_list'], metrics['recall_list'], metrics['accuracy_list'], metrics['iou_list'] = [], [], [], []
     elif mode == 'sdt':
         metrics['mse_list'] = []
 
@@ -151,10 +152,11 @@ def validate(model, dataloader, device='cuda', mode='mask'):
             # Get the segmentation
             seg = watershed_from_boundary_distance(pred, inner_mask, min_seed_distance=20)
 
-            precision, recall, accuracy = evaluate(gt_labels, seg)
+            precision, recall, accuracy, iou = evaluate(gt_labels, seg)
             metrics['precision_list'].append(precision)
             metrics['recall_list'].append(recall)
             metrics['accuracy_list'].append(accuracy)
+            metrics['iou_list'].append(iou)
         
         elif mode == 'sdt':
             # Compare mse of predicted sdt to computed sdt
