@@ -151,7 +151,7 @@ def validate(model, dataloader, device='cuda', mode='mask'):
             # Get the segmentation
             seg = watershed_from_boundary_distance(pred, inner_mask, min_seed_distance=20)
 
-            precision, recall, accuracy = evaluate(gt_labels, pred, mode='sdt')
+            precision, recall, accuracy = evaluate(gt_labels, seg)
             metrics['precision_list'].append(precision)
             metrics['recall_list'].append(recall)
             metrics['accuracy_list'].append(accuracy)
