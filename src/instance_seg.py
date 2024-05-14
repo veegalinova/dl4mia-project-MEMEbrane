@@ -10,7 +10,6 @@ from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
 from torchvision.transforms import v2 as transformsv2
 from model import UNet
-from model_evaluation import validate
 from tqdm import tqdm
 import tifffile
 from data_processing import SDTDataset
@@ -50,7 +49,7 @@ def gaussian_noise(image, mean = 0, var = 0.05):
     gauss = gauss.reshape(ch,row,col)
     noisy = image + gauss
     noisy = transforms.Normalize([0.5], [0.5])(noisy)
-    return noisy
+    return noisy.to(torch.float)
 
 
 def train(
@@ -63,7 +62,6 @@ def train(
     log_image_interval=20,
     tb_logger=None,
     device=None,
-    early_stop=False,
 ):
     if device is None:
         # You can pass in a device or we will default to using
@@ -132,9 +130,33 @@ def train(
                     global_step=step,
                 )
 
-        if early_stop and batch_id > 5:
-            print("Stopping test early!")
-            break
+
+def validate(model,
+    loader,
+    loss_function,
+    epoch,
+    tb_logger=None,
+    device='cuda'):
+    
+    model.eval()
+    running_loss = 0.
+
+    i = 0
+    with torch.no_grad():
+        for batch_id, (x, y) in enumerate(loader):
+            # move input and target to the active device (either cpu or gpu)
+            x, y = x.to(device), y.to(device)
+            pred = model(x)
+            val_loss = loss_function(pred, y)
+            running_loss += val_loss
+            i += 1
+    val_loss /= i
+    if tb_logger is not None:
+        tb_logger.add_scalar("MSE/validation", val_loss, epoch)
+    print(f"Validation mse after training epoch {epoch} is {val_loss}")
+    
+    return val_loss
+
 
 
 class EarlyStopper:
@@ -164,7 +186,7 @@ def main():
             transforms.RandomHorizontalFlip(0.5),
             transforms.RandomVerticalFlip(0.5),  
             transforms.RandomRotation([90,90]),
-            transforms.RandomCrop(200)   
+            transforms.RandomCrop(256)   
             ]
     )
     img_transforms = transforms.Compose(
@@ -175,10 +197,10 @@ def main():
         ]
     )
 
-    train_data = SDTDataset(transform=transform, train=True)
+    train_data = SDTDataset(transform=transform, img_transform=img_transforms, train=True)
     train_loader = DataLoader(train_data, batch_size=10, shuffle=True, num_workers=8)
-    val_data = SDTDataset(transform=transform, train=False, return_mask=True)
-    val_loader = DataLoader(val_data, batch_size=10)
+    val_data = SDTDataset(transform=transform, img_transform=img_transforms, train=False, return_mask=True)
+    val_loader = DataLoader(val_data, batch_size=5)
 
     print(len(train_loader), len(val_loader))
     # Initialize the model.
@@ -200,7 +222,6 @@ def main():
     optimizer = torch.optim.Adam(unet.parameters(), lr=learning_rate)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5, min_lr=1e-8)
 
-    early_stop = False
     early_stopper = EarlyStopper(patience=10)
     for epoch in tqdm(range(200)):
         train(
@@ -211,15 +232,19 @@ def main():
             epoch,
             log_interval=10,
             device=device,
-            early_stop=early_stop,
+            tb_logger=writer,
         )
-        metrics = validate(unet, val_loader, device=device, mode='sdt')
-        mse = np.sum(metrics['mse_list']) / len(metrics['mse_list'])
-        writer.add_scalar("MSE/validation", mse, epoch)
-        scheduler.step(mse)
-        if early_stopper.early_stop(mse):
-            early_stop=True
-        print(f"Validation mse after training epoch {epoch} is {mse}")
+        val_loss = validate(unet, 
+                            train_loader,
+                            loss,
+                            epoch, 
+                            writer,
+                            device='cuda')
+
+        scheduler.step(val_loss)
+        if early_stopper.early_stop(val_loss):
+            print("Stopping test early!")
+            break
 
     output_path = Path("logs/")
     output_path.mkdir(exist_ok=True)
