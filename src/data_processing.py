@@ -11,6 +11,7 @@ from tqdm import tqdm
 import tifffile
 from scipy.ndimage import binary_fill_holes
 from torchvision.transforms import v2 as transformsv2
+from pathlib import Path
 
 
 def compute_sdt(labels: np.ndarray, scale: int = 5):
@@ -40,7 +41,7 @@ class SDTDataset(Dataset):
     """A PyTorch dataset to load images and cell masks."""
 
     def __init__(self, root_dir = "/group/dl4miacourse/projects/membrane/ecad_gfp_cropped/", 
-    transform=None, img_transform=None, return_mask=False, train=False, ignore_background=False, center_crop=True, pad=0):
+    transform=None, img_transform=None, return_mask=False, train=False, ignore_background=False, center_crop=True, pad=0, mean = None, std = None):
         
         # the directory with all the training samples
         if train:
@@ -74,7 +75,7 @@ class SDTDataset(Dataset):
             [
                 transforms.Grayscale(),
                 transforms.ToTensor(),
-                transforms.Normalize([0.5], [0.5]),  # 0.5 = mean and 0.5 = variance
+                #transforms.Normalize([0.5], [0.5]),  # 0.5 = mean and 0.5 = variance
             ]
         )
 
@@ -120,8 +121,31 @@ class SDTDataset(Dataset):
 
             self.loaded_imgs[sample_ind] = inp_transforms(image)
             self.loaded_masks[sample_ind] = mask
+            
             if self.ignore_background:
                 self.ignore_masks[sample_ind] = ignore_mask
+
+        #if you want to retrieve mean and sd from the train dataset
+        if mean is None or std is None:
+            self.mean = np.array(self.loaded_imgs).mean()
+            self.std = np.array(self.loaded_imgs).std()
+        else: 
+            self.mean = mean
+            self.std = std
+
+        for img in self.loaded_imgs:
+            img = transforms.Normalize([self.mean], [self.std])(img)
+
+        #if you want to retrieve mean and sd from the train dataset
+        if mean is None or std is None:
+            self.mean = np.array(self.loaded_imgs).mean()
+            self.std = np.array(self.loaded_imgs).std()
+        else: 
+            self.mean = mean
+            self.std = std
+
+        for img in self.loaded_imgs:
+            img = transforms.Normalize([self.mean], [self.std])(img)
 
     # get the total number of samples
     def __len__(self):
