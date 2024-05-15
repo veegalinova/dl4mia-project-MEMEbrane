@@ -120,7 +120,7 @@ def evaluate(gt_labels: np.ndarray, pred_labels: np.ndarray, th: float = 0.5):
     return precision, recall, accuracy, best_iou
 
 
-def validate(model, dataloader, device='cuda', mode='mask'):
+def get_metrics(model, dataloader, device='cuda', mode='mask'):
     #iterate over evaluation images
     metrics = dict()
     if mode == 'mask':
@@ -180,7 +180,7 @@ def main(modelpath: str="", filepath: str="", batch_size: int=1, shuffle: bool=F
 
     (precision_list,recall_list,accuracy_list) = ([],[],[],)
     metrics = dict()
-    metrics["precision"], metrics["recall"], metrics["accuracy"] = validate(model, validation_data)
+    metrics["precision"], metrics["recall"], metrics["accuracy"] = get_metrics(model, validation_data)
     with open('inference_results.pkl', 'wb') as f:
         pickle.dump(metrics, f)
 

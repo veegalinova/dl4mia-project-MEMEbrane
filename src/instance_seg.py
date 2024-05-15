@@ -14,6 +14,7 @@ from tqdm import tqdm
 import tifffile
 from data_processing import SDTDataset
 import sys
+from functools import partial
 sys.path.append('.')
 
 def salt_and_pepper_noise(image, amount=0.05):
@@ -40,7 +41,7 @@ def salt_and_pepper_noise(image, amount=0.05):
 
     return out
 
-def gaussian_noise(image, mean = 0, var = 0.05):
+def gaussian_noise(image, mean = 0, var = 0.01):
     ch, row,col= image.shape
     mean = mean
     var = var
@@ -150,7 +151,7 @@ def validate(model,
             val_loss = loss_function(pred, y)
             running_loss += val_loss
             i += 1
-    val_loss /= i
+    val_loss = running_loss / i
     if tb_logger is not None:
         tb_logger.add_scalar("MSE/validation", val_loss, epoch)
     print(f"Validation mse after training epoch {epoch} is {val_loss}")
@@ -191,7 +192,7 @@ def main():
     )
     img_transforms = transforms.Compose(
         [
-            transforms.GaussianBlur(kernel_size = 5, sigma= 5),
+            transforms.GaussianBlur(kernel_size=5, sigma=5),
             transformsv2.Lambda(salt_and_pepper_noise),
             transformsv2.Lambda(gaussian_noise)
         ]
@@ -199,8 +200,8 @@ def main():
 
     train_data = SDTDataset(transform=transform, img_transform=img_transforms, train=True)
     train_loader = DataLoader(train_data, batch_size=10, shuffle=True, num_workers=8)
-    val_data = SDTDataset(transform=transform, img_transform=img_transforms, train=False, return_mask=True)
-    val_loader = DataLoader(val_data, batch_size=5)
+    val_data = SDTDataset(transform=None, img_transform=None, train=False, return_mask=True)
+    val_loader = DataLoader(val_data, batch_size=10)
 
     print(len(train_loader), len(val_loader))
     # Initialize the model.
