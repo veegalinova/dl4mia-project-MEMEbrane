@@ -210,15 +210,17 @@ def main():
         ]
     )
 
-    ignore_background = True  # whether to ignore non-segmented cells
-    center_crop = False  # whether to do a center crop
+    ignore_background = False  # whether to ignore non-segmented cells
+    center_crop = True  # whether to do a center crop
     pad = 256  # min size in either dimension, will pad smaller images up to this size
+    watershed_scale = 3  # scale over which to calculate the distance transform
 
     print("Loading data ...")
-    train_data = SDTDataset(transform=transform, img_transform=img_transforms, train=True, ignore_background=ignore_background, center_crop=center_crop, pad=pad)
+    train_data = SDTDataset(transform=transform, img_transform=img_transforms, train=True, ignore_background=ignore_background, 
+                            center_crop=center_crop, pad=pad, watershed_scale=watershed_scale)
     train_loader = DataLoader(train_data, batch_size=10, shuffle=True, num_workers=8)
     val_data = SDTDataset(transform=None, img_transform=None, train=False, return_mask=True, ignore_background=False, 
-                          center_crop=center_crop, pad=pad, mean=train_data.mean, std=train_data.std)
+                          center_crop=center_crop, pad=pad, mean=train_data.mean, std=train_data.std, watershed_scale=watershed_scale)
     val_loader = DataLoader(val_data, batch_size=10)
 
     print(len(train_loader), len(val_loader))
@@ -241,7 +243,7 @@ def main():
     optimizer = torch.optim.Adam(unet.parameters(), lr=learning_rate)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5, min_lr=1e-8)
 
-    early_stopper = EarlyStopper(patience=100)
+    early_stopper = EarlyStopper(patience=10)
     for epoch in tqdm(range(200)):
         train(
             unet,
@@ -262,9 +264,18 @@ def main():
                             device='cuda')
 
         scheduler.step(val_loss)
+        
         if early_stopper.early_stop(val_loss):
             print("Stopping test early!")
             break
+
+        if epoch % 10 == 0:
+            output_path = Path("logs/")
+            output_path.mkdir(exist_ok=True)
+            torch.save(
+            {'model_state_dict': unet.state_dict()},
+            "logs/tmp.pth"
+            )
 
     output_path = Path("logs/")
     output_path.mkdir(exist_ok=True)

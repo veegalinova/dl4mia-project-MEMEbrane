@@ -41,7 +41,8 @@ class SDTDataset(Dataset):
     """A PyTorch dataset to load images and cell masks."""
 
     def __init__(self, root_dir = "/group/dl4miacourse/projects/membrane/ecad_gfp_cropped/", 
-    transform=None, img_transform=None, return_mask=False, train=False, ignore_background=False, center_crop=True, pad=0, mean=None, std=None):
+    transform=None, img_transform=None, return_mask=False, train=False, ignore_background=False, center_crop=True, 
+    pad=0, mean=None, std=None, watershed_scale=5):
         
         # the directory with all the training samples
         if train:
@@ -64,6 +65,7 @@ class SDTDataset(Dataset):
         self.ignore_background = ignore_background
         self.center_crop = center_crop
         self.pad = pad
+        self.watershed_scale = watershed_scale
 
         self.transform = (
             transform  # transformations to apply to both inputs and targets
@@ -126,25 +128,16 @@ class SDTDataset(Dataset):
 
         #if you want to retrieve mean and sd from the train dataset
         if mean is None or std is None:
-            self.mean = np.array(self.loaded_imgs).mean()
-            self.std = np.array(self.loaded_imgs).std()
+            img_array = np.concatenate([this_img.numpy().flatten() for this_img in self.loaded_imgs])
+            self.mean = img_array.mean()
+            self.std = img_array.std()
         else: 
             self.mean = mean
             self.std = std
 
-        for img in self.loaded_imgs:
-            img = transforms.Normalize([self.mean], [self.std])(img)
+        for i, img in enumerate(self.loaded_imgs):
+            self.loaded_imgs[i] = transforms.Normalize([self.mean], [self.std])(img)
 
-        #if you want to retrieve mean and sd from the train dataset
-        if mean is None or std is None:
-            self.mean = np.array(self.loaded_imgs).mean()
-            self.std = np.array(self.loaded_imgs).std()
-        else: 
-            self.mean = mean
-            self.std = std
-
-        for img in self.loaded_imgs:
-            img = transforms.Normalize([self.mean], [self.std])(img)
 
     # get the total number of samples
     def __len__(self):
@@ -185,7 +178,7 @@ class SDTDataset(Dataset):
 
     def create_sdt_target(self, mask):
 
-        sdt_target_array = compute_sdt(mask)
+        sdt_target_array = compute_sdt(mask, scale=self.watershed_scale)
         sdt_target = transforms.ToTensor()(sdt_target_array)
         return sdt_target.float()
 
