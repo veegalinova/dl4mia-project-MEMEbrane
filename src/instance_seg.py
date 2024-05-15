@@ -217,7 +217,8 @@ def main():
     print("Loading data ...")
     train_data = SDTDataset(transform=transform, img_transform=img_transforms, train=True, ignore_background=ignore_background, center_crop=center_crop, pad=pad)
     train_loader = DataLoader(train_data, batch_size=10, shuffle=True, num_workers=8)
-    val_data = SDTDataset(transform=None, img_transform=None, train=False, return_mask=True, ignore_background=False, center_crop=center_crop, pad=pad)
+    val_data = SDTDataset(transform=None, img_transform=None, train=False, return_mask=True, ignore_background=False, 
+                          center_crop=center_crop, pad=pad, mean=train_data.mean, std=train_data.std)
     val_loader = DataLoader(val_data, batch_size=10)
 
     print(len(train_loader), len(val_loader))
@@ -237,7 +238,7 @@ def main():
     learning_rate = 1e-4
     loss = torch.nn.MSELoss()
     writer = SummaryWriter()
-    optimizer = torch.optim.AdamW(unet.parameters(), lr=learning_rate)
+    optimizer = torch.optim.Adam(unet.parameters(), lr=learning_rate)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5, min_lr=1e-8)
 
     early_stopper = EarlyStopper(patience=100)

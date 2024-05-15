@@ -41,7 +41,7 @@ class SDTDataset(Dataset):
     """A PyTorch dataset to load images and cell masks."""
 
     def __init__(self, root_dir = "/group/dl4miacourse/projects/membrane/ecad_gfp_cropped/", 
-    transform=None, img_transform=None, return_mask=False, train=False, ignore_background=False, center_crop=True, pad=0, mean = None, std = None):
+    transform=None, img_transform=None, return_mask=False, train=False, ignore_background=False, center_crop=True, pad=0, mean=None, std=None):
         
         # the directory with all the training samples
         if train:
@@ -75,7 +75,6 @@ class SDTDataset(Dataset):
             [
                 transforms.Grayscale(),
                 transforms.ToTensor(),
-                #transforms.Normalize([0.5], [0.5]),  # 0.5 = mean and 0.5 = variance
             ]
         )
 
