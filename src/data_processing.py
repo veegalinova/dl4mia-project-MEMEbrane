@@ -10,6 +10,7 @@ from torchvision import transforms
 from tqdm import tqdm
 import tifffile
 from torchvision.transforms import v2 as transformsv2
+from pathlib import Path
 
 
 def compute_sdt(labels: np.ndarray, scale: int = 5):
@@ -39,7 +40,7 @@ class SDTDataset(Dataset):
     """A PyTorch dataset to load images and cell masks."""
 
     def __init__(self, root_dir = "/group/dl4miacourse/projects/membrane/ecad_gfp_cropped/", 
-    transform=None, img_transform=None, return_mask=False, train=False):
+    transform=None, img_transform=None, return_mask=False, train=False, mean = None, std = None):
         
         # the directory with all the training samples
         if train:
@@ -69,7 +70,7 @@ class SDTDataset(Dataset):
             [
                 transforms.Grayscale(),
                 transforms.ToTensor(),
-                transforms.Normalize([0.5], [0.5]),  # 0.5 = mean and 0.5 = variance
+                #transforms.Normalize([0.5], [0.5]),  # 0.5 = mean and 0.5 = variance
             ]
         )
 
@@ -96,6 +97,14 @@ class SDTDataset(Dataset):
             mask = transformsv2.Pad(100)(mask)
             mask = transforms.CenterCrop(256)(mask)
             self.loaded_masks[sample_ind] = mask
+
+        #if you want to retrieve mean and sd from the train dataset
+        if mean is None or std is None:
+            self.mean = self.loaded_imgs.mean()
+            self.std = self.loaded_imgs.std()
+        else: 
+            self.mean = mean
+            self.std = std
 
     # get the total number of samples
     def __len__(self):
