@@ -41,12 +41,12 @@ def salt_and_pepper_noise(image, amount=0.05):
 
     return out
 
-def gaussian_noise(image, mean = 0, var = 0.01):
+def gaussian_noise(image, mean = 0, var = 0.0005):
     ch, row,col= image.shape
     mean = mean
     var = var
     sigma = var**0.5
-    gauss = np.random.normal(mean,sigma,(ch, row,col))
+    gauss = np.random.normal(mean,sigma,(ch,row,col))
     gauss = gauss.reshape(ch,row,col)
     noisy = image + gauss
     noisy = transforms.Normalize([0.5], [0.5])(noisy)
@@ -192,8 +192,8 @@ def main():
     )
     img_transforms = transforms.Compose(
         [
-            transforms.GaussianBlur(kernel_size=5, sigma=5),
-            transformsv2.Lambda(salt_and_pepper_noise),
+            #transforms.GaussianBlur(kernel_size=5, sigma=5),
+            #transformsv2.Lambda(salt_and_pepper_noise),
             transformsv2.Lambda(gaussian_noise)
         ]
     )
