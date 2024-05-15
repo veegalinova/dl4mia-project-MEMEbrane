@@ -106,6 +106,9 @@ class SDTDataset(Dataset):
             self.mean = mean
             self.std = std
 
+        for img in self.loaded_imgs:
+            img = transforms.Normalize([self.mean], [self.std])(img)
+
     # get the total number of samples
     def __len__(self):
         return self.nsamples
