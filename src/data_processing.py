@@ -100,8 +100,8 @@ class SDTDataset(Dataset):
 
         #if you want to retrieve mean and sd from the train dataset
         if mean is None or std is None:
-            self.mean = self.loaded_imgs.mean()
-            self.std = self.loaded_imgs.std()
+            self.mean = np.array(self.loaded_imgs).mean()
+            self.std = np.array(self.loaded_imgs).std()
         else: 
             self.mean = mean
             self.std = std
