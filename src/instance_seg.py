@@ -63,6 +63,7 @@ def train(
     log_image_interval=20,
     tb_logger=None,
     device=None,
+    ignore_background=False,
 ):
     if device is None:
         # You can pass in a device or we will default to using
@@ -80,9 +81,13 @@ def train(
     model = model.to(device)
 
     # iterate over the batches of this epoch
-    for batch_id, (x, y) in enumerate(loader):
-        # move input and target to the active device (either cpu or gpu)
-        x, y = x.to(device), y.to(device)
+    for batch_id, batch in enumerate(loader):
+        if ignore_background:
+            x, y, ignore_mask = batch[0], batch[1], batch[2]
+            x, y, ignore_mask = x.to(device), y.to(device), ignore_mask.to(device)
+        else:
+            x, y = batch[0], batch[1]
+            x, y = x.to(device), y.to(device)
 
         # zero the gradients for this iteration
         optimizer.zero_grad()
@@ -93,6 +98,12 @@ def train(
             y = crop(y, prediction)
         if y.dtype != prediction.dtype:
             y = y.type(prediction.dtype)
+
+        # mask out areas that should be ignored in gt and prediction by multiplying by ignore mask
+        if ignore_background:
+            y = y * ignore_mask
+            prediction = prediction * ignore_mask
+
         loss = loss_function(prediction, y)
 
         # backpropagate the loss and adjust the parameters
@@ -144,8 +155,9 @@ def validate(model,
 
     i = 0
     with torch.no_grad():
-        for batch_id, (x, y) in enumerate(loader):
+        for batch_id, batch in enumerate(loader):
             # move input and target to the active device (either cpu or gpu)
+            x, y = batch[0], batch[1]
             x, y = x.to(device), y.to(device)
             pred = model(x)
             val_loss = loss_function(pred, y)
@@ -198,9 +210,14 @@ def main():
         ]
     )
 
-    train_data = SDTDataset(transform=transform, img_transform=img_transforms, train=True)
+    ignore_background = True  # whether to ignore non-segmented cells
+    center_crop = False  # whether to do a center crop
+    pad = 256  # min size in either dimension, will pad smaller images up to this size
+
+    print("Loading data ...")
+    train_data = SDTDataset(transform=transform, img_transform=img_transforms, train=True, ignore_background=ignore_background, center_crop=center_crop, pad=pad)
     train_loader = DataLoader(train_data, batch_size=10, shuffle=True, num_workers=8)
-    val_data = SDTDataset(transform=None, img_transform=None, train=False, return_mask=True)
+    val_data = SDTDataset(transform=None, img_transform=None, train=False, return_mask=True, ignore_background=False, center_crop=center_crop, pad=pad)
     val_loader = DataLoader(val_data, batch_size=10)
 
     print(len(train_loader), len(val_loader))
@@ -220,10 +237,10 @@ def main():
     learning_rate = 1e-4
     loss = torch.nn.MSELoss()
     writer = SummaryWriter()
-    optimizer = torch.optim.Adam(unet.parameters(), lr=learning_rate)
+    optimizer = torch.optim.AdamW(unet.parameters(), lr=learning_rate)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5, min_lr=1e-8)
 
-    early_stopper = EarlyStopper(patience=10)
+    early_stopper = EarlyStopper(patience=100)
     for epoch in tqdm(range(200)):
         train(
             unet,
@@ -234,6 +251,7 @@ def main():
             log_interval=10,
             device=device,
             tb_logger=writer,
+            ignore_background=ignore_background
         )
         val_loss = validate(unet, 
                             train_loader,
