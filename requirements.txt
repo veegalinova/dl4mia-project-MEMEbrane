@@ -10,3 +10,5 @@ pytorch-cuda==11.8
 ipykernel
 tqdm
 scikit-learn
+careamics_portfolio
+careamics
