@@ -167,7 +167,17 @@ def get_metrics(model, dataloader, device='cuda', mode='mask'):
     
 def main(modelpath: str="", filepath: str="", batch_size: int=1, shuffle: bool=False, workers:int=8):
     # load model from checkpoint
-    model = UNet()
+    model = UNet(
+        depth=4,
+        in_channels=1,
+        out_channels=1,
+        final_activation="Sigmoid",
+        num_fmaps=16,
+        fmap_inc_factor=2,
+        downsample_factor=2,
+        padding="same",
+        upsample_mode="nearest",
+    )
     checkpoint = torch.load(modelpath)
     model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()
@@ -187,7 +197,7 @@ def main(modelpath: str="", filepath: str="", batch_size: int=1, shuffle: bool=F
 
 if __name__ == "__main__":
     filepath = ""
-    modelpath = ""
+    modelpath = "/localscratch/dl4mia-project-segmentation/logs/model.pth"
     batch_size = 1
     shuffle = False
     workers = 8

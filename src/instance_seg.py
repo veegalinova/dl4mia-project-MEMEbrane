@@ -203,7 +203,6 @@ def main():
             ]
     )
 
-    """
     img_transforms = transforms.Compose(
         [
             #transforms.GaussianBlur(kernel_size=5, sigma=3),
@@ -211,7 +210,6 @@ def main():
             transformsv2.Lambda(gaussian_noise)
         ]
     )
-    """
     img_transforms = None
 
     ignore_background = False  # whether to ignore non-segmented cells
@@ -220,30 +218,30 @@ def main():
     watershed_scale = 5  # scale over which to calculate the distance transform
 
     print("Loading data ...")
+    """
     train_data = SDTDataset(transform=transform, img_transform=img_transforms, train=True, ignore_background=ignore_background, 
                             center_crop=center_crop, pad=pad, watershed_scale=watershed_scale)
     train_loader = DataLoader(train_data, batch_size=10, shuffle=True, num_workers=8)
     val_data = SDTDataset(transform=None, img_transform=None, train=False, return_mask=False, ignore_background=False, 
                           center_crop=center_crop, pad=pad, mean=train_data.mean, std=train_data.std, watershed_scale=watershed_scale)
     val_loader = DataLoader(val_data, batch_size=10)
-
     """
+
     train_data = GradientDataset(transform=transform, img_transform=img_transforms, train=True, ignore_background=ignore_background, 
                             center_crop=center_crop, pad=pad)
     train_loader = DataLoader(train_data, batch_size=5, shuffle=True, num_workers=8)
     val_data = GradientDataset(transform=None, img_transform=None, train=False, ignore_background=False, 
                           center_crop=center_crop, pad=pad, mean=train_data.mean, std=train_data.std)
     val_loader = DataLoader(val_data, batch_size=5)
-    """
-    
+
     print(len(train_loader), len(val_loader))
     # Initialize the model.
     unet = UNet(
         depth=4,
         in_channels=1,
         out_channels=1,
-        final_activation="Tanh",
-        num_fmaps=64,
+        final_activation="Sigmoid",
+        num_fmaps=16,
         fmap_inc_factor=2,
         downsample_factor=2,
         padding="same",
@@ -251,7 +249,7 @@ def main():
     )
 
     learning_rate = 1e-4
-    loss = torch.nn.MSELoss()
+    loss = torch.nn.BCELoss()
     writer = SummaryWriter()
     optimizer = torch.optim.Adam(unet.parameters(), lr=learning_rate)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5, min_lr=1e-8)
@@ -278,7 +276,6 @@ def main():
 
 
         scheduler.step(val_loss)
-        print(scheduler.get_last_lr())
         writer.add_scalar("learning_rate", scheduler.get_last_lr()[0], epoch)
         if early_stopper.early_stop(val_loss):
             print("Stopping test early!")
