@@ -12,7 +12,7 @@ from torchvision.transforms import v2 as transformsv2
 from model import UNet
 from tqdm import tqdm
 import tifffile
-from data_processing import SDTDataset
+from data_processing import SDTDataset, GradientDataset
 import sys
 from functools import partial
 sys.path.append('.')
@@ -41,7 +41,7 @@ def salt_and_pepper_noise(image, amount=0.05):
 
     return out
 
-def gaussian_noise(image, mean = 0, var = 0.0005):
+def gaussian_noise(image, mean = 0, var = 0.0001):
     ch, row,col= image.shape
     mean = mean
     var = var
@@ -165,8 +165,8 @@ def validate(model,
             i += 1
     val_loss = running_loss / i
     if tb_logger is not None:
-        tb_logger.add_scalar("MSE/validation", val_loss, epoch)
-    print(f"Validation mse after training epoch {epoch} is {val_loss}")
+        tb_logger.add_scalar("Loss/validation", val_loss, epoch)
+    print(f"Validation loss after training epoch {epoch} is {val_loss}")
     
     return val_loss
 
@@ -202,27 +202,40 @@ def main():
             transforms.RandomCrop(256)   
             ]
     )
+
+    """
     img_transforms = transforms.Compose(
         [
-            #transforms.GaussianBlur(kernel_size=5, sigma=5),
+            #transforms.GaussianBlur(kernel_size=5, sigma=3),
             #transformsv2.Lambda(salt_and_pepper_noise),
             transformsv2.Lambda(gaussian_noise)
         ]
     )
+    """
+    img_transforms = None
 
     ignore_background = False  # whether to ignore non-segmented cells
     center_crop = True  # whether to do a center crop
     pad = 256  # min size in either dimension, will pad smaller images up to this size
-    watershed_scale = 3  # scale over which to calculate the distance transform
+    watershed_scale = 5  # scale over which to calculate the distance transform
 
     print("Loading data ...")
     train_data = SDTDataset(transform=transform, img_transform=img_transforms, train=True, ignore_background=ignore_background, 
                             center_crop=center_crop, pad=pad, watershed_scale=watershed_scale)
     train_loader = DataLoader(train_data, batch_size=10, shuffle=True, num_workers=8)
-    val_data = SDTDataset(transform=None, img_transform=None, train=False, return_mask=True, ignore_background=False, 
+    val_data = SDTDataset(transform=None, img_transform=None, train=False, return_mask=False, ignore_background=False, 
                           center_crop=center_crop, pad=pad, mean=train_data.mean, std=train_data.std, watershed_scale=watershed_scale)
     val_loader = DataLoader(val_data, batch_size=10)
 
+    """
+    train_data = GradientDataset(transform=transform, img_transform=img_transforms, train=True, ignore_background=ignore_background, 
+                            center_crop=center_crop, pad=pad)
+    train_loader = DataLoader(train_data, batch_size=5, shuffle=True, num_workers=8)
+    val_data = GradientDataset(transform=None, img_transform=None, train=False, ignore_background=False, 
+                          center_crop=center_crop, pad=pad, mean=train_data.mean, std=train_data.std)
+    val_loader = DataLoader(val_data, batch_size=5)
+    """
+    
     print(len(train_loader), len(val_loader))
     # Initialize the model.
     unet = UNet(
@@ -230,7 +243,7 @@ def main():
         in_channels=1,
         out_channels=1,
         final_activation="Tanh",
-        num_fmaps=16,
+        num_fmaps=64,
         fmap_inc_factor=2,
         downsample_factor=2,
         padding="same",
@@ -243,7 +256,7 @@ def main():
     optimizer = torch.optim.Adam(unet.parameters(), lr=learning_rate)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5, min_lr=1e-8)
 
-    early_stopper = EarlyStopper(patience=10)
+    early_stopper = EarlyStopper(patience=20)
     for epoch in tqdm(range(200)):
         train(
             unet,
@@ -257,14 +270,16 @@ def main():
             ignore_background=ignore_background
         )
         val_loss = validate(unet, 
-                            train_loader,
+                            val_loader,
                             loss,
                             epoch, 
                             writer,
                             device='cuda')
 
+
         scheduler.step(val_loss)
-        
+        print(scheduler.get_last_lr())
+        writer.add_scalar("learning_rate", scheduler.get_last_lr()[0], epoch)
         if early_stopper.early_stop(val_loss):
             print("Stopping test early!")
             break
